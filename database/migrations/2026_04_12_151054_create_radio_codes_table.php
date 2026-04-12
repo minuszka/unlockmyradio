@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('brand', 50);
             $table->string('car_make', 50);
             $table->string('prefix', 10)->nullable();
-            $table->string('serial', 40)->index();
+            $table->string('serial', 40)->unique();
             $table->string('code', 20);
             $table->timestamps();
         });
