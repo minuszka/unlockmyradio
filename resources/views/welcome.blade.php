@@ -75,6 +75,7 @@
         <span class="brand-tag">Ford</span>
         <span class="brand-tag">General Motors</span>
         <span class="brand-tag">Honda</span>
+        <span class="brand-tag">Land Rover</span>
         <span class="brand-tag">Mercedes-Benz</span>
         <span class="brand-tag">Mitsubishi</span>
         <span class="brand-tag">Nissan</span>
@@ -82,6 +83,7 @@
         <span class="brand-tag">Peugeot</span>
         <span class="brand-tag">Renault</span>
         <span class="brand-tag">Rover</span>
+        <span class="brand-tag">Saab</span>
         <span class="brand-tag">Seat</span>
         <span class="brand-tag">Skoda</span>
         <span class="brand-tag">Suzuki</span>
