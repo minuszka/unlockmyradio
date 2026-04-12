@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\RadioCode;
 use Illuminate\Support\Facades\DB;
 
 class ImportRadioCodes extends Command
@@ -12,6 +11,7 @@ class ImportRadioCodes extends Command
     protected $description = 'Import radio codes from txt files';
 
     private array $brands = [
+        // Philips
         'AR'    => ['brand' => 'Philips', 'car_make' => 'Alfa Romeo'],
         'FIF'   => ['brand' => 'Philips', 'car_make' => 'Fiat'],
         'FO'    => ['brand' => 'Philips', 'car_make' => 'Ford'],
@@ -25,11 +25,55 @@ class ImportRadioCodes extends Command
         'RN'    => ['brand' => 'Philips', 'car_make' => 'Renault'],
         'SU'    => ['brand' => 'Philips', 'car_make' => 'Suzuki'],
         'VO'    => ['brand' => 'Philips', 'car_make' => 'Volvo'],
-        'VWZ'   => ['brand' => 'VAG',     'car_make' => 'Volkswagen'],
-        'SKZ'   => ['brand' => 'VAG',     'car_make' => 'Skoda'],
-        'AUZ'   => ['brand' => 'VAG',     'car_make' => 'Audi'],
-        'SEZ'   => ['brand' => 'VAG',     'car_make' => 'Seat'],
+        // VAG
+        'VWZ'   => ['brand' => 'VAG', 'car_make' => 'Volkswagen'],
+        'AUZ'   => ['brand' => 'VAG', 'car_make' => 'Audi'],
+        'SEZ'   => ['brand' => 'VAG', 'car_make' => 'Seat'],
+        'SKZ'   => ['brand' => 'VAG', 'car_make' => 'Skoda'],
+        // Grundig
+        'FA'    => ['brand' => 'Grundig', 'car_make' => 'Fiat'],
+        'DB'    => ['brand' => 'Grundig', 'car_make' => 'Mercedes-Benz'],
+        'SK'    => ['brand' => 'Grundig', 'car_make' => 'Skoda'],
+        'SE'    => ['brand' => 'Grundig', 'car_make' => 'Seat'],
+        'YS'    => ['brand' => 'Grundig', 'car_make' => 'Saab'],
+        'GR'    => ['brand' => 'Grundig', 'car_make' => 'Various'],
+        // Delco/GM
         'GM'    => ['brand' => 'Delco',   'car_make' => 'General Motors'],
+        // Ford
+        'M'     => ['brand' => 'Ford',    'car_make' => 'Ford'],
+        'V'     => ['brand' => 'Ford',    'car_make' => 'Ford'],
+    ];
+
+    private array $filenameMap = [
+        'vag'         => ['brand' => 'VAG',         'car_make' => 'VW/Audi/Skoda/Seat'],
+        'gm_codes'    => ['brand' => 'Delco/GM',    'car_make' => 'General Motors'],
+        'gm_opel'     => ['brand' => 'Grundig',     'car_make' => 'Opel/Vauxhall'],
+        'gm'          => ['brand' => 'Delco',       'car_make' => 'General Motors'],
+        'renault'     => ['brand' => 'Renault',     'car_make' => 'Renault/Dacia'],
+        'chrysler'    => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
+        'continental' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
+        'becker'      => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz'],
+        'cdr'         => ['brand' => 'Delco',       'car_make' => 'General Motors'],
+        'ford'        => ['brand' => 'Ford',        'car_make' => 'Ford'],
+        'fa_fiat'     => ['brand' => 'Grundig',     'car_make' => 'Fiat'],
+        'db_mercedes' => ['brand' => 'Grundig',     'car_make' => 'Mercedes-Benz'],
+        'sk_skoda'    => ['brand' => 'Grundig',     'car_make' => 'Skoda'],
+        'se_seat'     => ['brand' => 'Grundig',     'car_make' => 'Seat'],
+        'ys_saab'     => ['brand' => 'Grundig',     'car_make' => 'Saab'],
+        'gr_grundig'  => ['brand' => 'Grundig',     'car_make' => 'Various'],
+        'ar_alfa'     => ['brand' => 'Philips',     'car_make' => 'Alfa Romeo'],
+        'fif_fiat'    => ['brand' => 'Philips',     'car_make' => 'Fiat'],
+        'fo_ford'     => ['brand' => 'Philips',     'car_make' => 'Ford'],
+        'ho_honda'    => ['brand' => 'Philips',     'car_make' => 'Honda'],
+        'mi610s'      => ['brand' => 'Philips',     'car_make' => 'Mitsubishi'],
+        'ni_nissan'   => ['brand' => 'Philips',     'car_make' => 'Nissan'],
+        'op_opel'     => ['brand' => 'Philips',     'car_make' => 'Opel'],
+        'pe_peugeot'  => ['brand' => 'Philips',     'car_make' => 'Peugeot'],
+        'ph_philips'  => ['brand' => 'Philips',     'car_make' => 'Philips'],
+        'rg_rover'    => ['brand' => 'Philips',     'car_make' => 'Rover Group'],
+        'rn_renault'  => ['brand' => 'Philips',     'car_make' => 'Renault'],
+        'su68_suzuki' => ['brand' => 'Philips',     'car_make' => 'Suzuki'],
+        'vo_volvo'    => ['brand' => 'Philips',     'car_make' => 'Volvo'],
     ];
 
     public function handle(): void
@@ -69,19 +113,20 @@ class ImportRadioCodes extends Command
             if (count($parts) !== 2) continue;
 
             [$serial, $code] = $parts;
-            $serial = trim($serial);
-            $code = trim($code);
+            $serial = strtoupper(trim($serial));
+            $code   = trim($code);
 
             if (empty($serial) || empty($code)) continue;
+            if (in_array($code, ['NONE', 'CODE'])) continue;
 
             $prefix = $this->detectPrefix($serial);
 
             $batch[] = [
-                'brand'    => $brandInfo['brand'],
-                'car_make' => $brandInfo['car_make'],
-                'prefix'   => $prefix,
-                'serial'   => strtoupper($serial),
-                'code'     => $code,
+                'brand'      => $brandInfo['brand'],
+                'car_make'   => $brandInfo['car_make'],
+                'prefix'     => $prefix,
+                'serial'     => $serial,
+                'code'       => $code,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -105,23 +150,11 @@ class ImportRadioCodes extends Command
 
     private function detectBrand(string $filename): array
     {
-        $map = [
-            'vag'         => ['brand' => 'VAG',       'car_make' => 'VW/Audi/Skoda/Seat'],
-            'gm'          => ['brand' => 'Delco/GM',  'car_make' => 'General Motors'],
-            'renault'     => ['brand' => 'Renault',   'car_make' => 'Renault/Dacia'],
-            'chrysler'    => ['brand' => 'Chrysler',  'car_make' => 'Chrysler/Dodge/Jeep'],
-            'continental' => ['brand' => 'Continental','car_make' => 'Fiat/Alfa/VAG'],
-            'grundig'     => ['brand' => 'Grundig',   'car_make' => 'Various'],
-            'becker'      => ['brand' => 'Becker',    'car_make' => 'Mercedes-Benz'],
-            'cdr'         => ['brand' => 'Delco',     'car_make' => 'General Motors'],
-        ];
-
         $lower = strtolower($filename);
-        foreach ($map as $key => $info) {
+        foreach ($this->filenameMap as $key => $info) {
             if (str_contains($lower, $key)) return $info;
         }
 
-        // Philips prefix detektálás
         foreach ($this->brands as $prefix => $info) {
             if (str_starts_with(strtoupper($filename), $prefix)) return $info;
         }
@@ -132,9 +165,8 @@ class ImportRadioCodes extends Command
     private function detectPrefix(string $serial): string
     {
         foreach (array_keys($this->brands) as $prefix) {
-            if (str_starts_with(strtoupper($serial), $prefix)) return $prefix;
+            if (str_starts_with($serial, $prefix)) return $prefix;
         }
         return substr($serial, 0, 3);
     }
 }
-
