@@ -45,22 +45,15 @@ class ImportRadioCodes extends Command
     ];
 
     private array $filenameMap = [
-        'vag'         => ['brand' => 'VAG',         'car_make' => 'VW/Audi/Skoda/Seat'],
-        'gm_codes'    => ['brand' => 'Delco/GM',    'car_make' => 'General Motors'],
-        'gm_opel'     => ['brand' => 'Grundig',     'car_make' => 'Opel/Vauxhall'],
-        'gm'          => ['brand' => 'Delco',       'car_make' => 'General Motors'],
-        'renault'     => ['brand' => 'Renault',     'car_make' => 'Renault/Dacia'],
-        'chrysler'    => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
-        'continental' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
-        'becker'      => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz'],
-        'cdr'         => ['brand' => 'Delco',       'car_make' => 'General Motors'],
-        'ford'        => ['brand' => 'Ford',        'car_make' => 'Ford'],
+        // Grundig — specifikus előbb
         'fa_fiat'     => ['brand' => 'Grundig',     'car_make' => 'Fiat'],
         'db_mercedes' => ['brand' => 'Grundig',     'car_make' => 'Mercedes-Benz'],
         'sk_skoda'    => ['brand' => 'Grundig',     'car_make' => 'Skoda'],
         'se_seat'     => ['brand' => 'Grundig',     'car_make' => 'Seat'],
         'ys_saab'     => ['brand' => 'Grundig',     'car_make' => 'Saab'],
         'gr_grundig'  => ['brand' => 'Grundig',     'car_make' => 'Various'],
+        'gm_opel'     => ['brand' => 'Grundig',     'car_make' => 'Opel/Vauxhall'],
+        // Philips — specifikus előbb
         'ar_alfa'     => ['brand' => 'Philips',     'car_make' => 'Alfa Romeo'],
         'fif_fiat'    => ['brand' => 'Philips',     'car_make' => 'Fiat'],
         'fo_ford'     => ['brand' => 'Philips',     'car_make' => 'Ford'],
@@ -74,6 +67,17 @@ class ImportRadioCodes extends Command
         'rn_renault'  => ['brand' => 'Philips',     'car_make' => 'Renault'],
         'su68_suzuki' => ['brand' => 'Philips',     'car_make' => 'Suzuki'],
         'vo_volvo'    => ['brand' => 'Philips',     'car_make' => 'Volvo'],
+        // Delco/GM — specifikus előbb
+        'gm_codes'    => ['brand' => 'Delco/GM',    'car_make' => 'General Motors'],
+        'cdr'         => ['brand' => 'Delco',       'car_make' => 'General Motors'],
+        'gm'          => ['brand' => 'Delco',       'car_make' => 'General Motors'],
+        // Többi
+        'vag'         => ['brand' => 'VAG',         'car_make' => 'VW/Audi/Skoda/Seat'],
+        'chrysler'    => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
+        'continental' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
+        'becker'      => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz'],
+        'renault'     => ['brand' => 'Renault',     'car_make' => 'Renault/Dacia'],
+        'ford'        => ['brand' => 'Ford',        'car_make' => 'Ford'],
     ];
 
     public function handle(): void
