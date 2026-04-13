@@ -40,7 +40,7 @@
     <div class="box">
         <div class="badge">✓ Code Found in Database</div>
         <h1>Select Your Radio Model</h1>
-        <p class="subtitle">Multiple radio models found for this serial.<br>Select the one that matches your radio.</p>
+        <p class="subtitle">Multiple radio models found for this serial.<br>For Becker radios, select by button count (4 / 6 / 8).</p>
         <div class="serial-display">{{ $serial }}</div>
         <form action="{{ route('search.select') }}" method="POST">
             @csrf

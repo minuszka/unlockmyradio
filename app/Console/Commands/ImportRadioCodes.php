@@ -75,6 +75,9 @@ class ImportRadioCodes extends Command
         'vag'         => ['brand' => 'VAG',         'car_make' => 'VW/Audi/Skoda/Seat'],
         'chrysler'    => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
         'continental' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
+        'becker_4btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (4 buttons)'],
+        'becker_6btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (6 buttons)'],
+        'becker_8btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (8 buttons)'],
         'becker'      => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz'],
         'renault'     => ['brand' => 'Renault',     'car_make' => 'Renault/Dacia'],
         'ford'        => ['brand' => 'Ford',        'car_make' => 'Ford'],
@@ -123,7 +126,7 @@ class ImportRadioCodes extends Command
             if (empty($serial) || empty($code)) continue;
             if (in_array($code, ['NONE', 'CODE'])) continue;
 
-            $prefix = $this->detectPrefix($serial);
+            $prefix = $this->detectPrefix($serial, $filename);
 
             $batch[] = [
                 'brand'      => $brandInfo['brand'],
@@ -166,8 +169,19 @@ class ImportRadioCodes extends Command
         return ['brand' => 'Unknown', 'car_make' => 'Unknown'];
     }
 
-    private function detectPrefix(string $serial): string
+    private function detectPrefix(string $serial, string $filename = ''): string
     {
+        $lowerFilename = strtolower($filename);
+        if (str_contains($lowerFilename, 'becker_4btn')) {
+            return 'B4BTN';
+        }
+        if (str_contains($lowerFilename, 'becker_6btn')) {
+            return 'B6BTN';
+        }
+        if (str_contains($lowerFilename, 'becker_8btn')) {
+            return 'B8BTN';
+        }
+
         foreach (array_keys($this->brands) as $prefix) {
             if (str_starts_with($serial, $prefix)) return $prefix;
         }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\RadioCode;
+use App\Support\RadioCodeResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -13,6 +14,10 @@ use Stripe\Stripe;
 
 class RadioCodeController extends Controller
 {
+    public function __construct(private readonly RadioCodeResolver $resolver)
+    {
+    }
+
     public function index(): View
     {
         return view('welcome');
@@ -24,8 +29,8 @@ class RadioCodeController extends Controller
             'serial' => 'required|string|min:4|max:40',
         ]);
 
-        $serial = strtoupper(trim($validated['serial']));
-        $results = RadioCode::query()->where('serial', $serial)->get();
+        $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
+        $results = $this->resolver->findCandidates($inputSerial);
 
         if ($results->isEmpty()) {
             return back()->with('error', 'No code found for this serial number.');
@@ -33,16 +38,17 @@ class RadioCodeController extends Controller
 
         if ($results->count() === 1) {
             $result = $results->first();
+
             return view('result', [
-                'serial'       => $serial,
-                'brand'        => $result->brand,
-                'car_make'     => $result->car_make,
+                'serial' => $inputSerial,
+                'brand' => $result->brand,
+                'car_make' => $result->car_make,
                 'radio_code_id' => $result->id,
             ]);
         }
 
         return view('select-model', [
-            'serial'  => $serial,
+            'serial' => $inputSerial,
             'options' => $results,
         ]);
     }
@@ -50,41 +56,56 @@ class RadioCodeController extends Controller
     public function selectModel(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'serial'        => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:4|max:40',
             'radio_code_id' => 'required|integer',
         ]);
 
-        $serial = strtoupper(trim($validated['serial']));
+        $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
         $result = RadioCode::query()->find($validated['radio_code_id']);
 
-        if (!$result || $result->serial !== $serial) {
+        if (!$result || !$this->resolver->serialMatchesResult($inputSerial, $result)) {
             return back()->with('error', 'Invalid selection.');
         }
 
         return view('result', [
-            'serial'        => $serial,
-            'brand'         => $result->brand,
-            'car_make'      => $result->car_make,
+            'serial' => $inputSerial,
+            'brand' => $result->brand,
+            'car_make' => $result->car_make,
             'radio_code_id' => $result->id,
         ]);
     }
 
-    public function checkout(Request $request): RedirectResponse
+    public function checkout(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'serial'        => 'required|string|min:4|max:40',
-            'email'         => 'required|email|max:100',
+            'serial' => 'required|string|min:4|max:40',
+            'email' => 'required|email|max:100',
             'radio_code_id' => 'nullable|integer',
         ]);
 
-        $serial = strtoupper(trim($validated['serial']));
+        $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
 
-        $result = isset($validated['radio_code_id'])
-            ? RadioCode::query()->find($validated['radio_code_id'])
-            : RadioCode::query()->where('serial', $serial)->first();
+        if (isset($validated['radio_code_id'])) {
+            $result = RadioCode::query()->find($validated['radio_code_id']);
 
-        if (!$result) {
-            return back()->with('error', 'Serial not found.');
+            if (!$result || !$this->resolver->serialMatchesResult($inputSerial, $result)) {
+                return back()->with('error', 'Invalid radio model selection for this serial.');
+            }
+        } else {
+            $results = $this->resolver->findCandidates($inputSerial);
+
+            if ($results->isEmpty()) {
+                return back()->with('error', 'Serial not found.');
+            }
+
+            if ($results->count() > 1) {
+                return view('select-model', [
+                    'serial' => $inputSerial,
+                    'options' => $results,
+                ]);
+            }
+
+            $result = $results->first();
         }
 
         $secret = (string) config('services.stripe.secret');
@@ -102,7 +123,7 @@ class RadioCodeController extends Controller
                         'currency' => 'usd',
                         'product_data' => [
                             'name' => 'Radio Unlock Code - '.$result->car_make,
-                            'description' => 'Serial: '.$serial,
+                            'description' => 'Serial: '.$inputSerial,
                         ],
                         'unit_amount' => 299,
                     ],
@@ -113,10 +134,11 @@ class RadioCodeController extends Controller
                 'success_url' => route('payment.success').'?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => route('home'),
                 'metadata' => [
-                    'serial'        => $serial,
-                    'email'         => $validated['email'],
+                    'serial_input' => $inputSerial,
+                    'serial_lookup' => $result->serial,
+                    'email' => $validated['email'],
                     'radio_code_id' => (string) $result->id,
-                    'channel'       => 'web',
+                    'channel' => 'web',
                 ],
             ]);
         } catch (ApiErrorException $e) {
@@ -124,7 +146,7 @@ class RadioCodeController extends Controller
         }
 
         Order::query()->create([
-            'serial' => $serial,
+            'serial' => $result->serial,
             'email' => $validated['email'],
             'stripe_session_id' => $session->id,
             'amount' => 2.99,
