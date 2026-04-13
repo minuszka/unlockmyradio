@@ -73,8 +73,12 @@ class ImportRadioCodes extends Command
         'gm'          => ['brand' => 'Delco',       'car_make' => 'General Motors'],
         // Többi
         'vag'         => ['brand' => 'VAG',         'car_make' => 'VW/Audi/Skoda/Seat'],
-        'chrysler'    => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
-        'continental' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
+        'chrysler_4digit'   => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep (4-digit lookup)'],
+        'chrysler_5_5digit' => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep (5 buttons)'],
+        'chrysler_5_6digit' => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep (6 buttons)'],
+        'chrysler'          => ['brand' => 'Chrysler',    'car_make' => 'Chrysler/Dodge/Jeep'],
+        'continental_vp1_vp2' => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG (VP1/VP2)'],
+        'continental'       => ['brand' => 'Continental', 'car_make' => 'Fiat/Alfa/VAG'],
         'becker_4btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (4 buttons)'],
         'becker_6btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (6 buttons)'],
         'becker_8btn' => ['brand' => 'Becker',      'car_make' => 'Mercedes-Benz (8 buttons)'],
@@ -180,6 +184,18 @@ class ImportRadioCodes extends Command
         }
         if (str_contains($lowerFilename, 'becker_8btn')) {
             return 'B8BTN';
+        }
+        if (str_contains($lowerFilename, 'chrysler_4digit')) {
+            return 'CHR4';
+        }
+        if (str_contains($lowerFilename, 'chrysler_5_5digit')) {
+            return 'CHR55';
+        }
+        if (str_contains($lowerFilename, 'chrysler_5_6digit')) {
+            return 'CHR56';
+        }
+        if (str_contains($lowerFilename, 'continental_vp1_vp2')) {
+            return 'CONT4';
         }
 
         foreach (array_keys($this->brands) as $prefix) {

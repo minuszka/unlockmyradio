@@ -26,7 +26,7 @@ class RadioCodeController extends Controller
     public function search(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'serial' => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:6|max:64',
         ]);
 
         $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
@@ -56,7 +56,7 @@ class RadioCodeController extends Controller
     public function selectModel(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'serial' => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:6|max:64',
             'radio_code_id' => 'required|integer',
         ]);
 
@@ -78,7 +78,7 @@ class RadioCodeController extends Controller
     public function checkout(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'serial' => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:6|max:64',
             'email' => 'required|email|max:100',
             'radio_code_id' => 'nullable|integer',
         ]);
@@ -206,12 +206,15 @@ class RadioCodeController extends Controller
             ]);
         }
 
+        $displaySerial = isset($session->metadata->serial_input)
+            ? (string) $session->metadata->serial_input
+            : $order->serial;
+
         return view('success', [
-            'serial' => $order->serial,
+            'serial' => $displaySerial,
             'code' => $order->code_revealed,
             'car_make' => $order->car_make,
             'brand' => $order->brand,
         ]);
     }
 }
-

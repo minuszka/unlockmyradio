@@ -25,7 +25,7 @@ class RadioCodeApiController extends Controller
     public function search(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'serial' => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:6|max:64',
         ]);
 
         $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
@@ -67,14 +67,7 @@ class RadioCodeApiController extends Controller
                 'found' => true,
                 'requires_selection' => true,
                 'price_usd' => self::PRICE_USD,
-                'options' => $results->map(static function (RadioCode $item): array {
-                    return [
-                        'radio_code_id' => $item->id,
-                        'brand' => $item->brand,
-                        'car_make' => $item->car_make,
-                        'lookup_serial' => $item->serial,
-                    ];
-                })->values(),
+                'options' => $results->map(fn (RadioCode $item): array => $this->formatOption($item))->values(),
             ],
         ]);
     }
@@ -82,7 +75,7 @@ class RadioCodeApiController extends Controller
     public function checkout(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'serial' => 'required|string|min:4|max:40',
+            'serial' => 'required|string|min:6|max:64',
             'email' => 'required|email|max:100',
             'radio_code_id' => 'nullable|integer',
             'success_url' => [
@@ -136,14 +129,7 @@ class RadioCodeApiController extends Controller
                     'data' => [
                         'serial_input' => $inputSerial,
                         'serial_lookup' => $results->first()->serial,
-                        'options' => $results->map(static function (RadioCode $item): array {
-                            return [
-                                'radio_code_id' => $item->id,
-                                'brand' => $item->brand,
-                                'car_make' => $item->car_make,
-                                'lookup_serial' => $item->serial,
-                            ];
-                        })->values(),
+                        'options' => $results->map(fn (RadioCode $item): array => $this->formatOption($item))->values(),
                     ],
                 ], 409);
             }
@@ -313,15 +299,40 @@ class RadioCodeApiController extends Controller
             ], 500);
         }
 
+        $displaySerial = isset($session->metadata->serial_input)
+            ? (string) $session->metadata->serial_input
+            : $order->serial;
+
         return response()->json([
             'success' => true,
             'data' => [
-                'serial' => $order->serial,
+                'serial' => $displaySerial,
+                'serial_lookup' => $order->serial,
                 'brand' => $order->brand,
                 'car_make' => $order->car_make,
                 'code' => $order->code_revealed,
             ],
         ]);
     }
-}
 
+    private function formatOption(RadioCode $item): array
+    {
+        $lowerMake = strtolower($item->car_make);
+        $hint = null;
+
+        if (str_contains($lowerMake, '4 buttons')) $hint = 'Preset buttons: 1 2 3 4';
+        if (str_contains($lowerMake, '5 buttons')) $hint = 'Preset buttons: 1 2 3 4 5';
+        if (str_contains($lowerMake, '6 buttons')) $hint = 'Preset buttons: 1 2 3 4 5 6';
+        if (str_contains($lowerMake, '8 buttons')) $hint = 'Preset buttons: 1 2 3 4 5 6 7 8';
+        if (str_contains($lowerMake, '4-digit lookup')) $hint = 'Lookup uses last 4 digits from full serial';
+        if (str_contains($lowerMake, 'vp1/vp2')) $hint = 'Lookup uses last 4 digits from A2C/A3C serial';
+
+        return [
+            'radio_code_id' => $item->id,
+            'brand' => $item->brand,
+            'car_make' => $item->car_make,
+            'lookup_serial' => $item->serial,
+            'hint' => $hint,
+        ];
+    }
+}
