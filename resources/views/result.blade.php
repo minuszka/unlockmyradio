@@ -49,6 +49,7 @@
         <form action="{{ route('checkout') }}" method="POST">
             @csrf
             <input type="hidden" name="serial" value="{{ $serial }}">
+            <input type="hidden" name="radio_code_id" value="{{ $radio_code_id }}">
             <input type="email" name="email" class="email-input" placeholder="Your email address" required>
             <button type="submit" class="btn">💳 PAY & REVEAL CODE</button>
         </form>
