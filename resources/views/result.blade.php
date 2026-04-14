@@ -21,6 +21,7 @@
         .code-preview { background: #0A0A0A; border: 2px dashed #2a2a2a; border-radius: 10px; padding: 30px; margin-bottom: 30px; }
         .code-preview p { color: #aaa; font-size: 14px; margin-bottom: 10px; }
         .code-hidden { font-family: 'Rajdhani', sans-serif; font-size: 48px; font-weight: 700; color: #333; letter-spacing: 8px; }
+        .code-hidden.revealed { color: #F5C400; letter-spacing: 6px; }
         .price-tag { color: #F5C400; font-size: 14px; margin-bottom: 20px; }
         .email-input { width: 100%; background: #0A0A0A; border: 2px solid #2a2a2a; border-radius: 10px; padding: 14px 20px; color: #fff; font-size: 16px; font-family: 'Inter', sans-serif; margin-bottom: 16px; transition: border-color 0.2s; }
         .email-input:focus { outline: none; border-color: #F5C400; }
@@ -45,17 +46,47 @@
             <p>Your unlock code:</p>
             <div class="code-hidden">● ● ● ●</div>
         </div>
-        <p class="price-tag">Unlock for just $2.99</p>
-        <form action="{{ route('checkout') }}" method="POST">
-            @csrf
-            <input type="hidden" name="serial" value="{{ $serial }}">
-            <input type="hidden" name="radio_code_id" value="{{ $radio_code_id }}">
-            <input type="email" name="email" class="email-input" placeholder="Your email address" required>
-            <button type="submit" class="btn">💳 PAY & REVEAL CODE</button>
-        </form>
+        @if($direct_reveal_enabled ?? false)
+            <p class="price-tag">Test mode active: no payment required.</p>
+        @else
+            <p class="price-tag">Unlock for just $2.99</p>
+        @endif
+        @if($direct_reveal_enabled ?? false)
+            <button id="reveal-code-btn" type="button" class="btn" data-code="{{ $direct_code ?? '' }}">
+                PLAY &amp; REVEAL CODE
+            </button>
+        @else
+            <form action="{{ route('checkout') }}" method="POST">
+                @csrf
+                <input type="hidden" name="serial" value="{{ $serial }}">
+                <input type="hidden" name="radio_code_id" value="{{ $radio_code_id }}">
+                <input type="email" name="email" class="email-input" placeholder="Your email address" required>
+                <button type="submit" class="btn">💳 PAY &amp; REVEAL CODE</button>
+            </form>
+        @endif
         <a href="/" class="back-link">← Search another serial</a>
     </div>
 </div>
+@if($direct_reveal_enabled ?? false)
+<script>
+    (() => {
+        const btn = document.getElementById('reveal-code-btn');
+        const codeEl = document.querySelector('.code-hidden');
+        if (!btn || !codeEl) return;
+
+        btn.addEventListener('click', () => {
+            const code = (btn.dataset.code || '').trim();
+            if (!code) return;
+
+            codeEl.textContent = code;
+            codeEl.classList.add('revealed');
+            btn.textContent = 'CODE REVEALED';
+            btn.disabled = true;
+            btn.style.opacity = '0.8';
+            btn.style.cursor = 'default';
+        });
+    })();
+</script>
+@endif
 </body>
 </html>
-

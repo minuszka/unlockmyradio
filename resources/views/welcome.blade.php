@@ -55,6 +55,11 @@
         @if(session('error'))
             <div class="error">{{ session('error') }}</div>
         @endif
+        @if(config('unlock.direct_reveal'))
+            <div class="error" style="background:#0f2a0f;border-color:#00C853;color:#7bf0a8;">
+                Test mode: payment is disabled. After search, click <strong>PLAY &amp; REVEAL CODE</strong> to show the PIN.
+            </div>
+        @endif
         <form action="{{ route('search') }}" method="POST">
             @csrf
             <input type="text" name="serial" placeholder="Enter full serial (e.g. AR670WA8078340, BE1492 Y0010001, A2C96189504000000400)" value="{{ old('serial') }}" autocomplete="off" required>
@@ -97,4 +102,3 @@
 <footer>&copy; 2026 UnlockMyRadio.com - All rights reserved.</footer>
 </body>
 </html>
-

@@ -7,6 +7,7 @@ use App\Models\RadioCode;
 use App\Support\RadioCodeResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
@@ -38,12 +39,15 @@ class RadioCodeController extends Controller
 
         if ($results->count() === 1) {
             $result = $results->first();
+            $directRevealEnabled = $this->isDirectRevealEnabled();
 
             return view('result', [
                 'serial' => $inputSerial,
                 'brand' => $result->brand,
                 'car_make' => $result->car_make,
                 'radio_code_id' => $result->id,
+                'direct_reveal_enabled' => $directRevealEnabled,
+                'direct_code' => $directRevealEnabled ? $result->code : null,
             ]);
         }
 
@@ -62,6 +66,7 @@ class RadioCodeController extends Controller
 
         $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
         $result = RadioCode::query()->find($validated['radio_code_id']);
+        $directRevealEnabled = $this->isDirectRevealEnabled();
 
         if (!$result || !$this->resolver->serialMatchesResult($inputSerial, $result)) {
             return back()->with('error', 'Invalid selection.');
@@ -72,16 +77,23 @@ class RadioCodeController extends Controller
             'brand' => $result->brand,
             'car_make' => $result->car_make,
             'radio_code_id' => $result->id,
+            'direct_reveal_enabled' => $directRevealEnabled,
+            'direct_code' => $directRevealEnabled ? $result->code : null,
         ]);
     }
 
     public function checkout(Request $request): View|RedirectResponse
     {
-        $validated = $request->validate([
+        $validationRules = [
             'serial' => 'required|string|min:6|max:64',
-            'email' => 'required|email|max:100',
             'radio_code_id' => 'nullable|integer',
-        ]);
+        ];
+
+        if (!$this->isDirectRevealEnabled()) {
+            $validationRules['email'] = 'required|email|max:100';
+        }
+
+        $validated = $request->validate($validationRules);
 
         $inputSerial = $this->resolver->normalizeSerial($validated['serial']);
 
@@ -106,6 +118,15 @@ class RadioCodeController extends Controller
             }
 
             $result = $results->first();
+        }
+
+        if ($this->isDirectRevealEnabled()) {
+            return view('success', [
+                'serial' => $inputSerial,
+                'code' => $result->code,
+                'car_make' => $result->car_make,
+                'brand' => $result->brand,
+            ]);
         }
 
         $secret = (string) config('services.stripe.secret');
@@ -188,14 +209,20 @@ class RadioCodeController extends Controller
             return redirect('/')->with('error', 'Order not found.');
         }
 
-        if ($order->status !== 'paid') {
-            $result = RadioCode::query()
-                ->where('serial', $order->serial)
-                ->where('brand', $order->brand)
-                ->where('car_make', $order->car_make)
-                ->first();
+        if ($order->status !== 'paid' || $order->code_revealed === null) {
+            $result = $this->resolveRadioCodeForOrder($order, $session);
 
             if (!$result) {
+                Log::warning('Web code resolution failed', [
+                    'order_id' => $order->id,
+                    'session_id' => $session->id,
+                    'order_serial' => $order->serial,
+                    'order_brand' => $order->brand,
+                    'order_car_make' => $order->car_make,
+                    'metadata_radio_code_id' => isset($session->metadata->radio_code_id) ? (string) $session->metadata->radio_code_id : null,
+                    'metadata_serial_lookup' => isset($session->metadata->serial_lookup) ? (string) $session->metadata->serial_lookup : null,
+                ]);
+
                 return redirect('/')->with('error', 'Code not found for this order.');
             }
 
@@ -204,6 +231,12 @@ class RadioCodeController extends Controller
                 'code_revealed' => $result->code,
                 'stripe_payment_id' => is_string($session->payment_intent) ? $session->payment_intent : null,
             ]);
+
+            $order->refresh();
+        }
+
+        if ($order->code_revealed === null) {
+            return redirect('/')->with('error', 'Code reveal failed for this order.');
         }
 
         $displaySerial = isset($session->metadata->serial_input)
@@ -216,5 +249,131 @@ class RadioCodeController extends Controller
             'car_make' => $order->car_make,
             'brand' => $order->brand,
         ]);
+    }
+
+    private function resolveRadioCodeForOrder(Order $order, Session $session): ?RadioCode
+    {
+        $metadataRadioCodeId = isset($session->metadata->radio_code_id)
+            ? (int) $session->metadata->radio_code_id
+            : 0;
+
+        if ($metadataRadioCodeId > 0) {
+            $byId = RadioCode::query()->find($metadataRadioCodeId);
+            if ($byId) {
+                return $byId;
+            }
+        }
+
+        $brand = trim((string) ($order->brand ?? ''));
+        $carMake = trim((string) ($order->car_make ?? ''));
+        $orderSerial = trim((string) ($order->serial ?? ''));
+
+        if ($orderSerial !== '' && $brand !== '' && $carMake !== '') {
+            $exact = RadioCode::query()
+                ->where('serial', $orderSerial)
+                ->where('brand', $brand)
+                ->where('car_make', $carMake)
+                ->first();
+
+            if ($exact) {
+                return $exact;
+            }
+        }
+
+        $serialKeys = [];
+        if (isset($session->metadata->serial_lookup)) {
+            $serialLookup = trim((string) $session->metadata->serial_lookup);
+            if ($serialLookup !== '') {
+                $serialKeys[] = $serialLookup;
+            }
+        }
+
+        if ($orderSerial !== '') {
+            $serialKeys[] = $orderSerial;
+        }
+
+        if (isset($session->metadata->serial_input)) {
+            $serialInput = strtoupper(trim((string) $session->metadata->serial_input));
+            if ($serialInput !== '') {
+                $serialKeys[] = $serialInput;
+
+                $compact = strtoupper(preg_replace('/[^A-Z0-9]+/i', '', $serialInput) ?? $serialInput);
+                if ($compact !== '') {
+                    $serialKeys[] = $compact;
+                }
+            }
+        }
+
+        $serialKeys = array_values(array_unique(array_filter($serialKeys)));
+        if ($serialKeys === []) {
+            return null;
+        }
+
+        $candidates = collect();
+        foreach ($serialKeys as $serialKey) {
+            $candidates = $candidates->merge(
+                RadioCode::query()->where('serial', $serialKey)->get()
+            );
+        }
+
+        $candidates = $candidates->unique('id')->values();
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        if ($candidates->count() === 1) {
+            return $candidates->first();
+        }
+
+        if ($brand !== '') {
+            $brandCandidates = $candidates
+                ->filter(static fn (RadioCode $item): bool => strcasecmp($item->brand, $brand) === 0)
+                ->values();
+
+            if ($brandCandidates->count() === 1) {
+                return $brandCandidates->first();
+            }
+
+            if ($carMake !== '') {
+                $exactMakeCandidates = $brandCandidates
+                    ->filter(static fn (RadioCode $item): bool => strcasecmp($item->car_make, $carMake) === 0)
+                    ->values();
+
+                if ($exactMakeCandidates->count() === 1) {
+                    return $exactMakeCandidates->first();
+                }
+
+                $normalizedOrderMake = $this->normalizeCompareToken($carMake);
+                $fuzzyMakeCandidates = $brandCandidates
+                    ->filter(function (RadioCode $item) use ($normalizedOrderMake): bool {
+                        $normalizedCandidateMake = $this->normalizeCompareToken($item->car_make);
+
+                        if ($normalizedOrderMake === '' || $normalizedCandidateMake === '') {
+                            return false;
+                        }
+
+                        return $normalizedCandidateMake === $normalizedOrderMake
+                            || str_starts_with($normalizedCandidateMake, $normalizedOrderMake)
+                            || str_starts_with($normalizedOrderMake, $normalizedCandidateMake);
+                    })
+                    ->values();
+
+                if ($fuzzyMakeCandidates->count() === 1) {
+                    return $fuzzyMakeCandidates->first();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeCompareToken(string $value): string
+    {
+        return strtolower(preg_replace('/[^A-Z0-9]+/i', '', $value) ?? $value);
+    }
+
+    private function isDirectRevealEnabled(): bool
+    {
+        return (bool) config('unlock.direct_reveal', true);
     }
 }

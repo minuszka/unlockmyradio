@@ -9,6 +9,7 @@ use App\Support\RadioCodeResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Stripe\Checkout\Session;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
@@ -266,17 +267,23 @@ class RadioCodeApiController extends Controller
         DB::transaction(function () use ($order, $session): void {
             $lockedOrder = Order::query()->lockForUpdate()->find($order->id);
 
-            if (!$lockedOrder || $lockedOrder->status === 'paid') {
+            if (!$lockedOrder || ($lockedOrder->status === 'paid' && $lockedOrder->code_revealed !== null)) {
                 return;
             }
 
-            $result = RadioCode::query()
-                ->where('serial', $lockedOrder->serial)
-                ->where('brand', $lockedOrder->brand)
-                ->where('car_make', $lockedOrder->car_make)
-                ->first();
+            $result = $this->resolveRadioCodeForOrder($lockedOrder, $session);
 
             if (!$result) {
+                Log::warning('API code resolution failed', [
+                    'order_id' => $lockedOrder->id,
+                    'session_id' => $session->id,
+                    'order_serial' => $lockedOrder->serial,
+                    'order_brand' => $lockedOrder->brand,
+                    'order_car_make' => $lockedOrder->car_make,
+                    'metadata_radio_code_id' => isset($session->metadata->radio_code_id) ? (string) $session->metadata->radio_code_id : null,
+                    'metadata_serial_lookup' => isset($session->metadata->serial_lookup) ? (string) $session->metadata->serial_lookup : null,
+                ]);
+
                 return;
             }
 
@@ -313,6 +320,127 @@ class RadioCodeApiController extends Controller
                 'code' => $order->code_revealed,
             ],
         ]);
+    }
+
+    private function resolveRadioCodeForOrder(Order $order, Session $session): ?RadioCode
+    {
+        $metadataRadioCodeId = isset($session->metadata->radio_code_id)
+            ? (int) $session->metadata->radio_code_id
+            : 0;
+
+        if ($metadataRadioCodeId > 0) {
+            $byId = RadioCode::query()->find($metadataRadioCodeId);
+            if ($byId) {
+                return $byId;
+            }
+        }
+
+        $brand = trim((string) ($order->brand ?? ''));
+        $carMake = trim((string) ($order->car_make ?? ''));
+        $orderSerial = trim((string) ($order->serial ?? ''));
+
+        if ($orderSerial !== '' && $brand !== '' && $carMake !== '') {
+            $exact = RadioCode::query()
+                ->where('serial', $orderSerial)
+                ->where('brand', $brand)
+                ->where('car_make', $carMake)
+                ->first();
+
+            if ($exact) {
+                return $exact;
+            }
+        }
+
+        $serialKeys = [];
+        if (isset($session->metadata->serial_lookup)) {
+            $serialLookup = trim((string) $session->metadata->serial_lookup);
+            if ($serialLookup !== '') {
+                $serialKeys[] = $serialLookup;
+            }
+        }
+
+        if ($orderSerial !== '') {
+            $serialKeys[] = $orderSerial;
+        }
+
+        if (isset($session->metadata->serial_input)) {
+            $serialInput = strtoupper(trim((string) $session->metadata->serial_input));
+            if ($serialInput !== '') {
+                $serialKeys[] = $serialInput;
+
+                $compact = strtoupper(preg_replace('/[^A-Z0-9]+/i', '', $serialInput) ?? $serialInput);
+                if ($compact !== '') {
+                    $serialKeys[] = $compact;
+                }
+            }
+        }
+
+        $serialKeys = array_values(array_unique(array_filter($serialKeys)));
+        if ($serialKeys === []) {
+            return null;
+        }
+
+        $candidates = collect();
+        foreach ($serialKeys as $serialKey) {
+            $candidates = $candidates->merge(
+                RadioCode::query()->where('serial', $serialKey)->get()
+            );
+        }
+
+        $candidates = $candidates->unique('id')->values();
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        if ($candidates->count() === 1) {
+            return $candidates->first();
+        }
+
+        if ($brand !== '') {
+            $brandCandidates = $candidates
+                ->filter(static fn (RadioCode $item): bool => strcasecmp($item->brand, $brand) === 0)
+                ->values();
+
+            if ($brandCandidates->count() === 1) {
+                return $brandCandidates->first();
+            }
+
+            if ($carMake !== '') {
+                $exactMakeCandidates = $brandCandidates
+                    ->filter(static fn (RadioCode $item): bool => strcasecmp($item->car_make, $carMake) === 0)
+                    ->values();
+
+                if ($exactMakeCandidates->count() === 1) {
+                    return $exactMakeCandidates->first();
+                }
+
+                $normalizedOrderMake = $this->normalizeCompareToken($carMake);
+                $fuzzyMakeCandidates = $brandCandidates
+                    ->filter(function (RadioCode $item) use ($normalizedOrderMake): bool {
+                        $normalizedCandidateMake = $this->normalizeCompareToken($item->car_make);
+
+                        if ($normalizedOrderMake === '' || $normalizedCandidateMake === '') {
+                            return false;
+                        }
+
+                        return $normalizedCandidateMake === $normalizedOrderMake
+                            || str_starts_with($normalizedCandidateMake, $normalizedOrderMake)
+                            || str_starts_with($normalizedOrderMake, $normalizedCandidateMake);
+                    })
+                    ->values();
+
+                if ($fuzzyMakeCandidates->count() === 1) {
+                    return $fuzzyMakeCandidates->first();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeCompareToken(string $value): string
+    {
+        return strtolower(preg_replace('/[^A-Z0-9]+/i', '', $value) ?? $value);
     }
 
     private function formatOption(RadioCode $item): array
