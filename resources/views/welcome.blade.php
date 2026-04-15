@@ -70,7 +70,7 @@
             <input id="serial-input" type="text" name="serial" placeholder="Enter full serial (e.g. AR670WA8078340, BE1492 Y0010001, A2C96189504000000400)" value="{{ old('serial') }}" autocomplete="off" required>
             <div id="serial-live-status" class="live-status neutral" aria-live="polite"></div>
             <button type="submit" class="btn">FIND MY CODE</button>
-            <p class="hint"><strong>Tip:</strong> Always enter full serial. For Becker / Chrysler / Continental the system automatically uses last 4 or 5 digits when needed.</p>
+            <p class="hint"><strong>Tip:</strong> Always enter full serial.</p>
         </form>
     </div>
 </div>

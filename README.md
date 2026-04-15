@@ -25,6 +25,7 @@ Users enter a radio serial, the system resolves the correct lookup strategy, and
 ## Core Features
 
 - Serial search with normalization and family-specific fallback logic
+- Live serial family detection while typing (`/serial/classify`)
 - Multi-result model selection flow (Becker, Chrysler, Continental overlaps)
 - Web checkout + payment success reveal
 - Public API v1 (`/api/v1/*`) for search and checkout
@@ -41,9 +42,11 @@ Flow:
 3. If multiple records match, return selection options
 
 Fallback rules:
+- Fiat Blaupunkt/Bosch: detect `BP...` / `CM...` (including `815` prefixed labels), lookup by exact token
 - Becker: detect `BE...` or 8-digit patterns, lookup by last 4 digits
 - Continental: detect `A2C...`, `A3C...`, `TVPQN...`, lookup by last 4 digits
 - Chrysler: detect `T...`, try last 5 first, then last 4
+- Ford/Visteon M/V series: detect `M...`/`V...` patterns, lookup by exact token when complete
 
 Important DB rule:
 - `radio_codes` is unique by `(serial, brand, car_make)` - not by `serial` alone.
@@ -56,6 +59,7 @@ Detailed rule reference:
 Defined in `routes/web.php`.
 
 - `GET /` - home search page
+- `GET /serial/classify` - live serial-family detection for typing UX
 - `POST /search` - resolve serial
 - `POST /search/select` - confirm model selection when multiple matches
 - `POST /checkout` - start checkout (or direct reveal in test mode)
@@ -69,6 +73,7 @@ Hardening behavior:
 Defined in `routes/api.php`, all under `/api/v1`.
 
 - `POST /search`
+- `POST /classify-serial`
 - `POST /checkout`
 - `GET /payment/success`
 - `GET /reseller/balance`
