@@ -108,6 +108,26 @@ class RadioCodeResolver
             }
         }
 
+        if ($family === 'fiat_bp_cm') {
+            $lookup = $classification['lookup_serial'] ?? null;
+            if (is_string($lookup) && $lookup !== '') {
+                $bpCm = $this->queryBySerial($lookup);
+                if ($bpCm->isNotEmpty()) {
+                    return $bpCm;
+                }
+            }
+        }
+
+        if ($family === 'ford_m' || $family === 'ford_v' || $family === 'fiat_visteon_m') {
+            $lookup = $classification['lookup_serial'] ?? null;
+            if (is_string($lookup) && $lookup !== '') {
+                $fordOrFiatM = $this->queryBySerial($lookup);
+                if ($fordOrFiatM->isNotEmpty()) {
+                    return $fordOrFiatM;
+                }
+            }
+        }
+
         $beckerLookup = $this->extractBeckerLookupSerial($serial, $compact);
         if ($beckerLookup !== null) {
             $becker = $this->queryByBrandAndSerial('Becker', $beckerLookup);
@@ -215,6 +235,15 @@ class RadioCodeResolver
         return $this->sortCandidates(
             RadioCode::query()
                 ->where('brand', $brand)
+                ->where('serial', $serial)
+                ->get()
+        );
+    }
+
+    private function queryBySerial(string $serial): Collection
+    {
+        return $this->sortCandidates(
+            RadioCode::query()
                 ->where('serial', $serial)
                 ->get()
         );

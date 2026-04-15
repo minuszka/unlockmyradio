@@ -19,6 +19,11 @@ class SerialClassifier
         $serial = $this->normalizeInput($input);
         $compact = $this->compactInput($serial);
 
+        $match = $this->matchFiatBpCm($compact);
+        if ($match !== null) {
+            return $this->withInput($match, $serial, $compact);
+        }
+
         $match = $this->matchFord($compact);
         if ($match !== null) {
             return $this->withInput($match, $serial, $compact);
@@ -78,24 +83,90 @@ class SerialClassifier
         return $result;
     }
 
-    private function matchFord(string $compact): ?array
+    private function matchFiatBpCm(string $compact): ?array
     {
-        if (preg_match('/([MV]\d{6})/', $compact, $m) !== 1) {
+        if (preg_match('/(?:815)?((?:BP|CM)[A-Z0-9]{1,12})/', $compact, $m) !== 1) {
             return null;
         }
 
         $token = $m[1];
-        $family = str_starts_with($token, 'M') ? 'ford_m' : 'ford_v';
+        $isFull = strlen($token) === 14;
 
         return $this->result(
-            family: $family,
-            confidence: 99,
-            brandHint: 'Ford',
-            lookupMode: 'exact',
-            lookupSerial: $token,
+            family: 'fiat_bp_cm',
+            confidence: $isFull ? 96 : 86,
+            brandHint: 'Fiat Blaupunkt/Bosch',
+            lookupMode: $isFull ? 'exact' : 'exact_pending',
+            lookupSerial: $isFull ? $token : null,
             matchedToken: $token,
             compactInput: $compact
         );
+    }
+
+    private function matchFord(string $compact): ?array
+    {
+        if (preg_match('/(V\d{6})/', $compact, $vFull) === 1) {
+            $token = $vFull[1];
+
+            return $this->result(
+                family: 'ford_v',
+                confidence: 99,
+                brandHint: 'Ford',
+                lookupMode: 'exact',
+                lookupSerial: $token,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/(V\d{2,5})/', $compact, $vPartial) === 1) {
+            $token = $vPartial[1];
+
+            return $this->result(
+                family: 'ford_v',
+                confidence: 86,
+                brandHint: 'Ford',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        $fiatVisteonContext = str_contains($compact, 'FIAT')
+            || str_contains($compact, 'STILO')
+            || str_contains($compact, 'BRAVO')
+            || str_contains($compact, 'VISTEON');
+
+        if (preg_match('/(M\d{6})/', $compact, $mFull) === 1) {
+            $token = $mFull[1];
+
+            return $this->result(
+                family: $fiatVisteonContext ? 'fiat_visteon_m' : 'ford_m',
+                confidence: $fiatVisteonContext ? 96 : 90,
+                brandHint: $fiatVisteonContext ? 'Fiat Visteon' : 'Ford / Fiat Visteon',
+                lookupMode: 'exact',
+                lookupSerial: $token,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/(M\d{2,5})/', $compact, $mPartial) === 1) {
+            $token = $mPartial[1];
+
+            return $this->result(
+                family: $fiatVisteonContext ? 'fiat_visteon_m' : 'ford_m',
+                confidence: $fiatVisteonContext ? 86 : 84,
+                brandHint: $fiatVisteonContext ? 'Fiat Visteon' : 'Ford / Fiat Visteon',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        return null;
     }
 
     private function matchVag(string $compact): ?array
@@ -120,27 +191,35 @@ class SerialClassifier
     private function matchContinentalVp(string $compact): ?array
     {
         $token = null;
+        $confidence = 0;
 
-        if (preg_match('/(A[23]C[A-Z0-9]{10,})/', $compact, $m) === 1) {
+        if (preg_match('/(A[23]C[A-Z0-9]{1,})/', $compact, $m) === 1) {
             $token = $m[1];
-        } elseif (preg_match('/(TVPQN[A-Z0-9]{5,})/', $compact, $m) === 1) {
+            $confidence = strlen($token) >= 10 ? 96 : 86;
+        } elseif (preg_match('/(TVPQN[A-Z0-9]{1,})/', $compact, $m) === 1) {
             $token = $m[1];
+            $confidence = strlen($token) >= 8 ? 94 : 84;
         }
 
         if ($token === null) {
             return null;
         }
 
-        $lookup = $this->tailDigitsOrChars($token, 4);
-        if ($lookup === null) {
-            return null;
+        $digits = preg_replace('/\D+/', '', $token) ?? '';
+        $lookup = null;
+        $lookupMode = 'last4_pending';
+        $readyMinLength = str_starts_with($token, 'A2C') || str_starts_with($token, 'A3C') ? 19 : 8;
+
+        if (strlen($digits) >= 4 && strlen($token) >= $readyMinLength) {
+            $lookup = substr($digits, -4);
+            $lookupMode = 'last4';
         }
 
         return $this->result(
             family: 'continental_vp',
-            confidence: 96,
+            confidence: $confidence,
             brandHint: 'Continental',
-            lookupMode: 'last4',
+            lookupMode: $lookupMode,
             lookupSerial: $lookup,
             matchedToken: $token,
             compactInput: $compact

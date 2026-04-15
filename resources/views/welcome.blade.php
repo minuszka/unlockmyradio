@@ -113,10 +113,12 @@
         if (!input || !status) return;
 
         const familyLabels = {
+            fiat_bp_cm: 'Fiat BP/CM serial detected',
+            fiat_visteon_m: 'Fiat Visteon M-serial detected',
             continental_vp: 'Continental VP1/VP2 detected',
             chrysler_t: 'Chrysler T-serial detected',
             becker: 'Becker serial detected',
-            ford_m: 'Ford M-serial detected',
+            ford_m: 'M-serial detected (Ford / Fiat Visteon)',
             ford_v: 'Ford V-serial detected',
             vag: 'VAG serial detected',
             grundig_fiat: 'Grundig Fiat serial detected',
@@ -146,7 +148,7 @@
             const family = data.family || 'unknown';
             const label = familyLabels[family] || 'Pattern detected';
             const lookup = data.lookup_serial ? `Lookup key: ${data.lookup_serial}.` : 'Lookup key pending.';
-            const confidence = typeof data.confidence === 'number' ? `Confidence: ${data.confidence}%.` : '';
+            const lookupMode = typeof data.lookup_mode === 'string' ? data.lookup_mode : '';
 
             if (family === 'short_4digit') {
                 setStatus(`${label}. ${lookup} This can match multiple families. Enter the full serial for auto brand detection.`, 'warn');
@@ -163,7 +165,12 @@
                 return;
             }
 
-            setStatus(`${label}. ${lookup} ${confidence}`.trim(), 'good');
+            if (lookupMode.endsWith('_pending')) {
+                setStatus(`${label}. ${lookup} Keep typing more of the full serial.`, 'warn');
+                return;
+            }
+
+            setStatus(`${label}. ${lookup}`.trim(), 'good');
         };
 
         const classify = async (value, localRequestId) => {
