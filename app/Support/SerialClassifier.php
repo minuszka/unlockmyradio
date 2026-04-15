@@ -49,12 +49,27 @@ class SerialClassifier
             return $this->withInput($match, $serial, $compact);
         }
 
+        $match = $this->matchDelcoGm($compact);
+        if ($match !== null) {
+            return $this->withInput($match, $serial, $compact);
+        }
+
         $match = $this->matchGrundigFiat($compact);
         if ($match !== null) {
             return $this->withInput($match, $serial, $compact);
         }
 
+        $match = $this->matchGrundigLegacy($compact);
+        if ($match !== null) {
+            return $this->withInput($match, $serial, $compact);
+        }
+
         $match = $this->matchPhilipsFiat($compact);
+        if ($match !== null) {
+            return $this->withInput($match, $serial, $compact);
+        }
+
+        $match = $this->matchPhilipsLegacy($compact);
         if ($match !== null) {
             return $this->withInput($match, $serial, $compact);
         }
@@ -315,6 +330,87 @@ class SerialClassifier
         );
     }
 
+    private function matchDelcoGm(string $compact): ?array
+    {
+        if (!str_starts_with($compact, 'GM')) {
+            return null;
+        }
+
+        if (preg_match('/^GM0205[A-Z0-9]{7,9}$/', $compact) === 1) {
+            return $this->result(
+                family: 'delco_gm',
+                confidence: 98,
+                brandHint: 'Delco CDR2005',
+                lookupMode: 'exact',
+                lookupSerial: $compact,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GM1500[A-Z0-9]{8}$/', $compact) === 1) {
+            return $this->result(
+                family: 'delco_gm',
+                confidence: 98,
+                brandHint: 'Delco CDR500',
+                lookupMode: 'exact',
+                lookupSerial: $compact,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GM(?:0200|0303|1303|0100|3201)[A-Z0-9]{8}$/', $compact) === 1) {
+            return $this->result(
+                family: 'grundig_opel_gm',
+                confidence: 97,
+                brandHint: 'Grundig Opel/GM',
+                lookupMode: 'exact',
+                lookupSerial: $compact,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GM0804[A-Z0-9]{8}$/', $compact) === 1) {
+            return $this->result(
+                family: 'gm_pending',
+                confidence: 74,
+                brandHint: 'GM family (ambiguous)',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GM[A-Z0-9]{10,12}$/', $compact) === 1) {
+            return $this->result(
+                family: 'delco_gm',
+                confidence: 90,
+                brandHint: 'Delco/GM',
+                lookupMode: 'exact',
+                lookupSerial: $compact,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GM[A-Z0-9]{1,9}$/', $compact) === 1 || preg_match('/^GM[A-Z0-9]{13,}$/', $compact) === 1) {
+            return $this->result(
+                family: 'gm_pending',
+                confidence: 74,
+                brandHint: 'GM family',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        return null;
+    }
+
     private function matchGrundigFiat(string $compact): ?array
     {
         if (preg_match('/^(FA[A-Z0-9]{8,})$/', $compact, $m) !== 1) {
@@ -334,6 +430,54 @@ class SerialClassifier
         );
     }
 
+    private function matchGrundigLegacy(string $compact): ?array
+    {
+        if (str_starts_with($compact, 'SEZ') || str_starts_with($compact, 'SKZ')) {
+            return null;
+        }
+
+        $map = [
+            'DB' => 'Grundig Mercedes-Benz',
+            'SE' => 'Grundig Seat',
+            'SK' => 'Grundig Skoda',
+            'YS' => 'Grundig Saab',
+        ];
+
+        foreach ($map as $prefix => $hint) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'[A-Z0-9]{0,12}$/', $compact) !== 1) {
+                continue;
+            }
+
+            $isFull = strlen($compact) === 14;
+
+            return $this->result(
+                family: 'grundig_legacy',
+                confidence: $isFull ? 93 : 83,
+                brandHint: $hint,
+                lookupMode: $isFull ? 'exact' : 'exact_pending',
+                lookupSerial: $isFull ? $compact : null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^GR[A-Z0-9]{8,12}$/', $compact) === 1) {
+            $isFull = strlen($compact) === 14;
+
+            return $this->result(
+                family: 'grundig_legacy',
+                confidence: $isFull ? 88 : 78,
+                brandHint: 'Grundig',
+                lookupMode: $isFull ? 'exact' : 'exact_pending',
+                lookupSerial: $isFull ? $compact : null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        return null;
+    }
+
     private function matchPhilipsFiat(string $compact): ?array
     {
         if (preg_match('/^(FIF[A-Z0-9]{8,}|FI710[A-Z0-9]{8,})$/', $compact, $m) !== 1) {
@@ -351,6 +495,82 @@ class SerialClassifier
             matchedToken: $token,
             compactInput: $compact
         );
+    }
+
+    private function matchPhilipsLegacy(string $compact): ?array
+    {
+        if (preg_match('/^MI610S[A-Z0-9]{0,8}$/', $compact) === 1) {
+            $isFull = strlen($compact) === 14;
+
+            return $this->result(
+                family: 'philips_legacy',
+                confidence: $isFull ? 95 : 85,
+                brandHint: 'Philips Mitsubishi',
+                lookupMode: $isFull ? 'exact' : 'exact_pending',
+                lookupSerial: $isFull ? $compact : null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^SU68[A-Z0-9]{0,10}$/', $compact) === 1) {
+            $isFull = strlen($compact) === 14;
+
+            return $this->result(
+                family: 'philips_legacy',
+                confidence: $isFull ? 95 : 85,
+                brandHint: 'Philips Suzuki',
+                lookupMode: $isFull ? 'exact' : 'exact_pending',
+                lookupSerial: $isFull ? $compact : null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^PHA[A-Z0-9]{0,11}$/', $compact) === 1) {
+            return $this->result(
+                family: 'philips_legacy',
+                confidence: 80,
+                brandHint: 'Philips PH-family',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        $map = [
+            'AR' => 'Philips Alfa Romeo',
+            'FO' => 'Philips Ford',
+            'HO' => 'Philips Honda',
+            'NI' => 'Philips Nissan',
+            'OP' => 'Philips Opel',
+            'PE' => 'Philips Peugeot',
+            'PH' => 'Philips',
+            'RG' => 'Philips Rover Group',
+            'RN' => 'Philips Renault',
+            'VO' => 'Philips Volvo',
+        ];
+
+        foreach ($map as $prefix => $hint) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'[A-Z0-9]{0,12}$/', $compact) !== 1) {
+                continue;
+            }
+
+            $isFull = strlen($compact) === 14;
+
+            return $this->result(
+                family: 'philips_legacy',
+                confidence: $isFull ? 95 : 85,
+                brandHint: $hint,
+                lookupMode: $isFull ? 'exact' : 'exact_pending',
+                lookupSerial: $isFull ? $compact : null,
+                matchedToken: $compact,
+                compactInput: $compact
+            );
+        }
+
+        return null;
     }
 
     private function matchShortNumeric(string $compact): ?array

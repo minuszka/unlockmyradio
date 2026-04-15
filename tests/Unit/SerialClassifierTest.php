@@ -109,6 +109,76 @@ class SerialClassifierTest extends TestCase
         self::assertSame('exact', $result['lookup_mode']);
     }
 
+    public function testClassifiesDelcoAndGmFamilies(): void
+    {
+        $classifier = new SerialClassifier();
+
+        $cdr2005 = $classifier->classify('GM0205V1234567');
+        self::assertSame('delco_gm', $cdr2005['family']);
+        self::assertSame('exact', $cdr2005['lookup_mode']);
+
+        $cdr500 = $classifier->classify('GM1500X9475126');
+        self::assertSame('delco_gm', $cdr500['family']);
+        self::assertSame('exact', $cdr500['lookup_mode']);
+
+        $grundigGm = $classifier->classify('GM0200T3378004');
+        self::assertSame('grundig_opel_gm', $grundigGm['family']);
+        self::assertSame('exact', $grundigGm['lookup_mode']);
+
+        $ambiguous = $classifier->classify('GM0804A1234567');
+        self::assertSame('gm_pending', $ambiguous['family']);
+        self::assertSame('exact_pending', $ambiguous['lookup_mode']);
+    }
+
+    public function testClassifiesPhilipsLegacyFamilies(): void
+    {
+        $classifier = new SerialClassifier();
+
+        $ph = $classifier->classify('PH7850W1386751');
+        self::assertSame('philips_legacy', $ph['family']);
+        self::assertSame('exact', $ph['lookup_mode']);
+
+        $rn = $classifier->classify('RN593FT4000729');
+        self::assertSame('philips_legacy', $rn['family']);
+        self::assertSame('exact', $rn['lookup_mode']);
+
+        $mi = $classifier->classify('MI610SN9822316');
+        self::assertSame('philips_legacy', $mi['family']);
+        self::assertSame('exact', $mi['lookup_mode']);
+
+        $pha = $classifier->classify('PHA12345678901');
+        self::assertSame('philips_legacy', $pha['family']);
+        self::assertSame('exact_pending', $pha['lookup_mode']);
+    }
+
+    public function testClassifiesGrundigLegacyFamilies(): void
+    {
+        $classifier = new SerialClassifier();
+
+        $db = $classifier->classify('DB123456789012');
+        self::assertSame('grundig_legacy', $db['family']);
+        self::assertSame('exact', $db['lookup_mode']);
+
+        $se = $classifier->classify('SE312345678901');
+        self::assertSame('grundig_legacy', $se['family']);
+        self::assertSame('exact', $se['lookup_mode']);
+
+        $gr = $classifier->classify('GR1028V0110');
+        self::assertSame('grundig_legacy', $gr['family']);
+        self::assertSame('exact_pending', $gr['lookup_mode']);
+    }
+
+    public function testKeepsVagPriorityForSezAndSkz(): void
+    {
+        $classifier = new SerialClassifier();
+
+        $sez = $classifier->classify('SEZ1Z2E5256507');
+        self::assertSame('vag', $sez['family']);
+
+        $skz = $classifier->classify('SKZ1Z2E5256507');
+        self::assertSame('vag', $skz['family']);
+    }
+
     public function testClassifiesChryslerTWithLast5ThenLast4(): void
     {
         $classifier = new SerialClassifier();

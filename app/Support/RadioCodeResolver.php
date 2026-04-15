@@ -128,6 +128,16 @@ class RadioCodeResolver
             }
         }
 
+        if ($family === 'delco_gm' || $family === 'grundig_opel_gm' || $family === 'philips_legacy' || $family === 'grundig_legacy') {
+            $lookup = $classification['lookup_serial'] ?? null;
+            if (is_string($lookup) && $lookup !== '') {
+                $legacy = $this->queryBySerial($lookup);
+                if ($legacy->isNotEmpty()) {
+                    return $legacy;
+                }
+            }
+        }
+
         $beckerLookup = $this->extractBeckerLookupSerial($serial, $compact);
         if ($beckerLookup !== null) {
             $becker = $this->queryByBrandAndSerial('Becker', $beckerLookup);

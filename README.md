@@ -47,6 +47,9 @@ Fallback rules:
 - Continental: detect `A2C...`, `A3C...`, `TVPQN...`, lookup by last 4 digits
 - Chrysler: detect `T...`, try last 5 first, then last 4
 - Ford/Visteon M/V series: detect `M...`/`V...` patterns, lookup by exact token when complete
+- Delco/GM families: detect `GM...` variants (CDR500/CDR2005/Grundig Opel splits), ambiguous variants stay pending
+- Philips legacy families: detect `AR/FO/HO/MI610S/NI/OP/PE/PH/RG/RN/SU68/VO` with full-length exact mode
+- Grundig legacy families: detect `DB/SE/SK/YS/GR` (with `SEZ/SKZ` reserved for VAG detection)
 
 Important DB rule:
 - `radio_codes` is unique by `(serial, brand, car_make)` - not by `serial` alone.
