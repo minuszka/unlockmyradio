@@ -27,10 +27,10 @@ class SerialClassifierTest extends TestCase
         self::assertSame('exact_pending', $partial['lookup_mode']);
     }
 
-    public function testClassifiesContinentalVpFromEmbeddedA2C(): void
+    public function testClassifiesContinentalVpFromFullA2C(): void
     {
         $classifier = new SerialClassifier();
-        $result = $classifier->classify('Fiat 334 VP2 ECE NAV RVC A2C3827160100001193');
+        $result = $classifier->classify('A2C3827160100001193');
 
         self::assertSame('continental_vp', $result['family']);
         self::assertSame('1193', $result['lookup_serial']);
@@ -79,6 +79,23 @@ class SerialClassifierTest extends TestCase
         self::assertSame('ford_v', $v['family']);
         self::assertNull($v['lookup_serial']);
         self::assertSame('exact_pending', $v['lookup_mode']);
+    }
+
+    public function testDoesNotClassifyInnerFordPatternWithLeadingChars(): void
+    {
+        $classifier = new SerialClassifier();
+
+        $pv = $classifier->classify('PV123');
+        self::assertSame('unknown', $pv['family']);
+
+        $bm = $classifier->classify('BM123');
+        self::assertSame('unknown', $bm['family']);
+
+        $mTooLong = $classifier->classify('M1234567');
+        self::assertSame('unknown', $mTooLong['family']);
+
+        $vTooLong = $classifier->classify('V1234567');
+        self::assertSame('unknown', $vTooLong['family']);
     }
 
     public function testClassifiesFiatVisteonMWhenFiatContextPresent(): void

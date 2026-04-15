@@ -181,8 +181,8 @@ class RadioCodeResolver
 
     private function extractContinentalLookupSerial(string $serial, string $compact): ?string
     {
-        $isA2CorA3C = preg_match('/A[23]C[0-9A-Z]{10,}/', $compact) === 1;
-        $isTvpqn = preg_match('/TVPQN[0-9A-Z]{5,}/', $compact) === 1;
+        $isA2CorA3C = preg_match('/^A[23]C[0-9A-Z]{10,}$/', $compact) === 1;
+        $isTvpqn = preg_match('/^TVPQN[0-9A-Z]{5,}$/', $compact) === 1;
 
         if (!$isA2CorA3C && !$isTvpqn) {
             return null;

@@ -85,7 +85,7 @@ class SerialClassifier
 
     private function matchFiatBpCm(string $compact): ?array
     {
-        if (preg_match('/(?:815)?((?:BP|CM)[A-Z0-9]{1,12})/', $compact, $m) !== 1) {
+        if (preg_match('/^(?:815)?((?:BP|CM)[A-Z0-9]{1,12})$/', $compact, $m) !== 1) {
             return null;
         }
 
@@ -105,8 +105,8 @@ class SerialClassifier
 
     private function matchFord(string $compact): ?array
     {
-        if (preg_match('/(V\d{6})/', $compact, $vFull) === 1) {
-            $token = $vFull[1];
+        if (preg_match('/^V\d{6}$/', $compact, $vFull) === 1) {
+            $token = $vFull[0];
 
             return $this->result(
                 family: 'ford_v',
@@ -119,8 +119,8 @@ class SerialClassifier
             );
         }
 
-        if (preg_match('/(V\d{2,5})/', $compact, $vPartial) === 1) {
-            $token = $vPartial[1];
+        if (preg_match('/^V\d{2,5}$/', $compact, $vPartial) === 1) {
+            $token = $vPartial[0];
 
             return $this->result(
                 family: 'ford_v',
@@ -138,13 +138,13 @@ class SerialClassifier
             || str_contains($compact, 'BRAVO')
             || str_contains($compact, 'VISTEON');
 
-        if (preg_match('/(M\d{6})/', $compact, $mFull) === 1) {
+        if ($fiatVisteonContext && preg_match('/(M\d{6})$/', $compact, $mFull) === 1) {
             $token = $mFull[1];
 
             return $this->result(
-                family: $fiatVisteonContext ? 'fiat_visteon_m' : 'ford_m',
-                confidence: $fiatVisteonContext ? 96 : 90,
-                brandHint: $fiatVisteonContext ? 'Fiat Visteon' : 'Ford / Fiat Visteon',
+                family: 'fiat_visteon_m',
+                confidence: 96,
+                brandHint: 'Fiat Visteon',
                 lookupMode: 'exact',
                 lookupSerial: $token,
                 matchedToken: $token,
@@ -152,13 +152,41 @@ class SerialClassifier
             );
         }
 
-        if (preg_match('/(M\d{2,5})/', $compact, $mPartial) === 1) {
+        if ($fiatVisteonContext && preg_match('/(M\d{2,5})$/', $compact, $mPartial) === 1) {
             $token = $mPartial[1];
 
             return $this->result(
-                family: $fiatVisteonContext ? 'fiat_visteon_m' : 'ford_m',
-                confidence: $fiatVisteonContext ? 86 : 84,
-                brandHint: $fiatVisteonContext ? 'Fiat Visteon' : 'Ford / Fiat Visteon',
+                family: 'fiat_visteon_m',
+                confidence: 86,
+                brandHint: 'Fiat Visteon',
+                lookupMode: 'exact_pending',
+                lookupSerial: null,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^M\d{6}$/', $compact, $mFullStrict) === 1) {
+            $token = $mFullStrict[0];
+
+            return $this->result(
+                family: 'ford_m',
+                confidence: 90,
+                brandHint: 'Ford / Fiat Visteon',
+                lookupMode: 'exact',
+                lookupSerial: $token,
+                matchedToken: $token,
+                compactInput: $compact
+            );
+        }
+
+        if (preg_match('/^M\d{2,5}$/', $compact, $mPartialStrict) === 1) {
+            $token = $mPartialStrict[0];
+
+            return $this->result(
+                family: 'ford_m',
+                confidence: 84,
+                brandHint: 'Ford / Fiat Visteon',
                 lookupMode: 'exact_pending',
                 lookupSerial: null,
                 matchedToken: $token,
@@ -171,7 +199,7 @@ class SerialClassifier
 
     private function matchVag(string $compact): ?array
     {
-        if (preg_match('/((?:VWZ|AUZ|SEZ|SKZ)[A-Z0-9]{6,})/', $compact, $m) !== 1) {
+        if (preg_match('/^((?:VWZ|AUZ|SEZ|SKZ)[A-Z0-9]{6,})$/', $compact, $m) !== 1) {
             return null;
         }
 
@@ -193,10 +221,10 @@ class SerialClassifier
         $token = null;
         $confidence = 0;
 
-        if (preg_match('/(A[23]C[A-Z0-9]{1,})/', $compact, $m) === 1) {
+        if (preg_match('/^(A[23]C[A-Z0-9]{1,})$/', $compact, $m) === 1) {
             $token = $m[1];
             $confidence = strlen($token) >= 10 ? 96 : 86;
-        } elseif (preg_match('/(TVPQN[A-Z0-9]{1,})/', $compact, $m) === 1) {
+        } elseif (preg_match('/^(TVPQN[A-Z0-9]{1,})$/', $compact, $m) === 1) {
             $token = $m[1];
             $confidence = strlen($token) >= 8 ? 94 : 84;
         }
@@ -228,7 +256,7 @@ class SerialClassifier
 
     private function matchChryslerT(string $compact): ?array
     {
-        if (preg_match('/(T[A-Z0-9]{8,})/', $compact, $m) !== 1) {
+        if (preg_match('/^(T[A-Z0-9]{8,})$/', $compact, $m) !== 1) {
             return null;
         }
 
@@ -259,7 +287,7 @@ class SerialClassifier
         $token = null;
         $confidence = 0;
 
-        if (preg_match('/(BE\d{4,})/', $compact, $m) === 1) {
+        if (preg_match('/^(BE\d{4,})$/', $compact, $m) === 1) {
             $token = $m[1];
             $confidence = 90;
         } elseif (preg_match('/^\d{8}$/', $compact) === 1) {
@@ -289,7 +317,7 @@ class SerialClassifier
 
     private function matchGrundigFiat(string $compact): ?array
     {
-        if (preg_match('/(FA[A-Z0-9]{8,})/', $compact, $m) !== 1) {
+        if (preg_match('/^(FA[A-Z0-9]{8,})$/', $compact, $m) !== 1) {
             return null;
         }
 
@@ -308,7 +336,7 @@ class SerialClassifier
 
     private function matchPhilipsFiat(string $compact): ?array
     {
-        if (preg_match('/(FIF[A-Z0-9]{8,}|FI710[A-Z0-9]{8,})/', $compact, $m) !== 1) {
+        if (preg_match('/^(FIF[A-Z0-9]{8,}|FI710[A-Z0-9]{8,})$/', $compact, $m) !== 1) {
             return null;
         }
 
