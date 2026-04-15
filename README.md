@@ -1,7 +1,9 @@
 # UNDER DEVELOPMENT
 
 <p align="center">
-  <img src="docs/images/unlockmyradio-hero.png" alt="UnlockMyRadio Hero" width="900">
+  <a href="docs/images/unlockmyradio-hero-v2.png">
+    <img src="docs/images/unlockmyradio-hero-v2.png" alt="UnlockMyRadio Hero" width="760">
+  </a>
 </p>
 
 # UnlockMyRadio
