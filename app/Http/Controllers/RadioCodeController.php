@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\RadioCode;
 use App\Support\RadioCodeResolver;
+use App\Support\SerialClassifier;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -15,13 +17,30 @@ use Stripe\Stripe;
 
 class RadioCodeController extends Controller
 {
-    public function __construct(private readonly RadioCodeResolver $resolver)
+    public function __construct(
+        private readonly RadioCodeResolver $resolver,
+        private readonly SerialClassifier $classifier
+    )
     {
     }
 
     public function index(): View
     {
         return view('welcome');
+    }
+
+    public function classify(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'serial' => 'required|string|min:2|max:160',
+        ]);
+
+        $classification = $this->classifier->classify($validated['serial']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $classification,
+        ]);
     }
 
     public function search(Request $request): View|RedirectResponse

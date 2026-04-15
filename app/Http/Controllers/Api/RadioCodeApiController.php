@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\RadioCode;
 use App\Support\RadioCodeResolver;
+use App\Support\SerialClassifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,8 +20,25 @@ class RadioCodeApiController extends Controller
     private const PRICE_USD = '2.99';
     private const PRICE_CENTS = 299;
 
-    public function __construct(private readonly RadioCodeResolver $resolver)
+    public function __construct(
+        private readonly RadioCodeResolver $resolver,
+        private readonly SerialClassifier $classifier
+    )
     {
+    }
+
+    public function classifySerial(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'serial' => 'required|string|min:2|max:160',
+        ]);
+
+        $classification = $this->classifier->classify($validated['serial']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $classification,
+        ]);
     }
 
     public function search(Request $request): JsonResponse

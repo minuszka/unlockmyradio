@@ -26,6 +26,11 @@
         .btn:hover { background: #FFD700; }
         .hint { color: #888; font-size: 13px; margin-top: 10px; line-height: 1.6; text-align: left; }
         .hint strong { color: #ddd; font-weight: 500; }
+        .live-status { display: none; margin-top: 0; margin-bottom: 12px; border-radius: 10px; border: 1px solid #2a2a2a; padding: 10px 12px; text-align: left; font-size: 13px; line-height: 1.45; }
+        .live-status.active { display: block; }
+        .live-status.good { background: #0f1d11; border-color: #00C853; color: #8ef5b5; }
+        .live-status.warn { background: #21190a; border-color: #F5C400; color: #ffd866; }
+        .live-status.neutral { background: #101318; border-color: #2a2a2a; color: #adb3bd; }
         .error { background: #2a0a0a; border: 1px solid #ff3d00; color: #ff6b6b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; text-align: left; }
         .stats { display: flex; justify-content: center; gap: 60px; padding: 60px 20px; }
         .stat { text-align: center; }
@@ -62,7 +67,8 @@
         @endif
         <form action="{{ route('search') }}" method="POST">
             @csrf
-            <input type="text" name="serial" placeholder="Enter full serial (e.g. AR670WA8078340, BE1492 Y0010001, A2C96189504000000400)" value="{{ old('serial') }}" autocomplete="off" required>
+            <input id="serial-input" type="text" name="serial" placeholder="Enter full serial (e.g. AR670WA8078340, BE1492 Y0010001, A2C96189504000000400)" value="{{ old('serial') }}" autocomplete="off" required>
+            <div id="serial-live-status" class="live-status neutral" aria-live="polite"></div>
             <button type="submit" class="btn">FIND MY CODE</button>
             <p class="hint"><strong>Tip:</strong> Always enter full serial. For Becker / Chrysler / Continental the system automatically uses last 4 or 5 digits when needed.</p>
         </form>
@@ -100,5 +106,111 @@
     </div>
 </div>
 <footer>&copy; 2026 UnlockMyRadio.com - All rights reserved.</footer>
+<script>
+    (() => {
+        const input = document.getElementById('serial-input');
+        const status = document.getElementById('serial-live-status');
+        if (!input || !status) return;
+
+        const familyLabels = {
+            continental_vp: 'Continental VP1/VP2 detected',
+            chrysler_t: 'Chrysler T-serial detected',
+            becker: 'Becker serial detected',
+            ford_m: 'Ford M-serial detected',
+            ford_v: 'Ford V-serial detected',
+            vag: 'VAG serial detected',
+            grundig_fiat: 'Grundig Fiat serial detected',
+            philips_fiat: 'Philips Fiat serial detected',
+            short_4digit: 'Short 4-digit input detected',
+            short_5digit: 'Short 5-digit input detected',
+            unknown: 'Pattern not recognized yet',
+        };
+
+        let debounceHandle = null;
+        let requestId = 0;
+
+        const setStatus = (text, tone = 'neutral') => {
+            status.textContent = text;
+            status.classList.add('active');
+            status.classList.remove('good', 'warn', 'neutral');
+            status.classList.add(tone);
+        };
+
+        const clearStatus = () => {
+            status.textContent = '';
+            status.classList.remove('active', 'good', 'warn', 'neutral');
+            status.classList.add('neutral');
+        };
+
+        const render = (data) => {
+            const family = data.family || 'unknown';
+            const label = familyLabels[family] || 'Pattern detected';
+            const lookup = data.lookup_serial ? `Lookup key: ${data.lookup_serial}.` : 'Lookup key pending.';
+            const confidence = typeof data.confidence === 'number' ? `Confidence: ${data.confidence}%.` : '';
+
+            if (family === 'short_4digit') {
+                setStatus(`${label}. ${lookup} This can match multiple families. Enter the full serial for auto brand detection.`, 'warn');
+                return;
+            }
+
+            if (family === 'short_5digit') {
+                setStatus(`${label}. ${lookup} This can still be ambiguous. Enter more of the full serial if possible.`, 'warn');
+                return;
+            }
+
+            if (family === 'unknown') {
+                setStatus(`${label}. Keep typing the full label serial.`, 'neutral');
+                return;
+            }
+
+            setStatus(`${label}. ${lookup} ${confidence}`.trim(), 'good');
+        };
+
+        const classify = async (value, localRequestId) => {
+            const url = new URL(@json(route('serial.classify')), window.location.origin);
+            url.searchParams.set('serial', value);
+
+            const response = await fetch(url.toString(), {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+            });
+
+            if (localRequestId !== requestId) return;
+            if (!response.ok) {
+                clearStatus();
+                return;
+            }
+
+            const payload = await response.json();
+            if (!payload || payload.success !== true || !payload.data) {
+                clearStatus();
+                return;
+            }
+
+            render(payload.data);
+        };
+
+        input.addEventListener('input', () => {
+            const value = input.value.trim();
+            if (value.length < 3) {
+                clearStatus();
+                return;
+            }
+
+            if (debounceHandle) {
+                clearTimeout(debounceHandle);
+            }
+
+            debounceHandle = setTimeout(() => {
+                requestId += 1;
+                classify(value, requestId).catch(() => {
+                    clearStatus();
+                });
+            }, 350);
+        });
+    })();
+</script>
 </body>
 </html>

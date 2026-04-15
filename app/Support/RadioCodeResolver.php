@@ -11,14 +11,18 @@ class RadioCodeResolver
     private const CHRYSLER_4_PREFIXES = ['CHR4'];
     private const CONTINENTAL_4_PREFIXES = ['CONT4'];
 
+    public function __construct(private readonly SerialClassifier $classifier)
+    {
+    }
+
     public function normalizeSerial(string $serial): string
     {
-        return strtoupper(trim(preg_replace('/\s+/', ' ', $serial) ?? $serial));
+        return $this->classifier->normalizeInput($serial);
     }
 
     public function compactSerial(string $serial): string
     {
-        return strtoupper(preg_replace('/[^A-Z0-9]+/i', '', $serial) ?? $serial);
+        return $this->classifier->compactInput($serial);
     }
 
     public function findCandidates(string $inputSerial): Collection
@@ -56,6 +60,54 @@ class RadioCodeResolver
 
     private function findFallbackCandidates(string $serial, string $compact): Collection
     {
+        $classification = $this->classifier->classify($serial);
+        $family = $classification['family'] ?? '';
+
+        if ($family === 'becker') {
+            $lookup = $classification['lookup_serial'] ?? null;
+            if (is_string($lookup) && $lookup !== '') {
+                $becker = $this->queryByBrandAndSerial('Becker', $lookup);
+                if ($becker->isNotEmpty()) {
+                    return $becker;
+                }
+            }
+        }
+
+        if ($family === 'continental_vp') {
+            $lookup = $classification['lookup_serial'] ?? null;
+            if (is_string($lookup) && $lookup !== '') {
+                $continental = $this->queryByBrandAndSerial('Continental', $lookup, self::CONTINENTAL_4_PREFIXES);
+                if ($continental->isNotEmpty()) {
+                    return $continental;
+                }
+            }
+        }
+
+        if ($family === 'chrysler_t') {
+            $lookupCandidates = $classification['lookup_candidates'] ?? [];
+            if (is_array($lookupCandidates) && $lookupCandidates !== []) {
+                $last5 = isset($lookupCandidates[0]) ? (string) $lookupCandidates[0] : null;
+                $last4 = isset($lookupCandidates[1]) ? (string) $lookupCandidates[1] : (isset($lookupCandidates[0]) ? (string) $lookupCandidates[0] : null);
+
+                if ($last5 !== null && strlen($last5) === 5) {
+                    $chrysler5 = $this->queryByBrandAndSerial('Chrysler', $last5, self::CHRYSLER_5_PREFIXES);
+                    if ($chrysler5->isNotEmpty()) {
+                        return $chrysler5;
+                    }
+                }
+
+                if ($last4 !== null && strlen($last4) === 4) {
+                    $chrysler4 = $this->queryByBrandAndSerial('Chrysler', $last4, self::CHRYSLER_4_PREFIXES);
+                    $continental4 = $this->queryByBrandAndSerial('Continental', $last4, self::CONTINENTAL_4_PREFIXES);
+
+                    $merged = $chrysler4->merge($continental4)->unique('id')->values();
+                    if ($merged->isNotEmpty()) {
+                        return $merged;
+                    }
+                }
+            }
+        }
+
         $beckerLookup = $this->extractBeckerLookupSerial($serial, $compact);
         if ($beckerLookup !== null) {
             $becker = $this->queryByBrandAndSerial('Becker', $beckerLookup);
@@ -109,8 +161,8 @@ class RadioCodeResolver
 
     private function extractContinentalLookupSerial(string $serial, string $compact): ?string
     {
-        $isA2CorA3C = preg_match('/^A[23]C[0-9A-Z]{10,}$/', $compact) === 1;
-        $isTvpqn = str_starts_with($compact, 'TVPQN');
+        $isA2CorA3C = preg_match('/A[23]C[0-9A-Z]{10,}/', $compact) === 1;
+        $isTvpqn = preg_match('/TVPQN[0-9A-Z]{5,}/', $compact) === 1;
 
         if (!$isA2CorA3C && !$isTvpqn) {
             return null;
