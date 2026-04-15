@@ -1,4 +1,4 @@
-# FEJLESZTES ALATT
+# UNDER DEVELOPMENT
 
 <p align="center">
   <img src="docs/images/unlockmyradio-hero.png" alt="UnlockMyRadio Hero" width="900">
