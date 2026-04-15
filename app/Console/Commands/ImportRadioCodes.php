@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 
 class ImportRadioCodes extends Command
 {
+    private const BATCH_SIZE = 1000;
+
     protected $signature = 'import:radiocodes {path}';
     protected $description = 'Import radio codes from txt files';
 
@@ -68,7 +70,7 @@ class ImportRadioCodes extends Command
         'su68_suzuki' => ['brand' => 'Philips',     'car_make' => 'Suzuki'],
         'vo_volvo'    => ['brand' => 'Philips',     'car_make' => 'Volvo'],
         // Delco/GM — specifikus előbb
-        'gm_codes'    => ['brand' => 'Delco/GM',    'car_make' => 'General Motors'],
+        'gm_codes'    => ['brand' => 'Delco',       'car_make' => 'General Motors'],
         'cdr'         => ['brand' => 'Delco',       'car_make' => 'General Motors'],
         'gm'          => ['brand' => 'Delco',       'car_make' => 'General Motors'],
         // Többi
@@ -87,23 +89,30 @@ class ImportRadioCodes extends Command
         'ford'        => ['brand' => 'Ford',        'car_make' => 'Ford'],
     ];
 
-    public function handle(): void
+    public function handle(): int
     {
         $path = $this->argument('path');
 
         if (!is_dir($path)) {
             $this->error("Directory not found: $path");
-            return;
+            return self::FAILURE;
         }
 
-        $files = glob("$path/*.txt");
-        $this->info("Found " . count($files) . " files.");
+        $files = glob(rtrim($path, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'*.txt');
+        if ($files === false) {
+            $this->error("Unable to list txt files in: $path");
+            return self::FAILURE;
+        }
+
+        $this->info('Found '.count($files).' files.');
 
         foreach ($files as $file) {
             $this->importFile($file);
         }
 
-        $this->info("Import complete!");
+        $this->info('Import complete!');
+
+        return self::SUCCESS;
     }
 
     private function importFile(string $file): void
@@ -116,19 +125,33 @@ class ImportRadioCodes extends Command
         $count = 0;
 
         $handle = fopen($file, 'r');
+        if ($handle === false) {
+            $this->error("  Unable to open file: $file");
+            return;
+        }
+
         while (($line = fgets($handle)) !== false) {
             $line = trim($line);
-            if (empty($line)) continue;
+            if ($line === '') {
+                continue;
+            }
 
             $parts = preg_split('/\s+/', $line, 2);
-            if (count($parts) !== 2) continue;
+            if (count($parts) !== 2) {
+                continue;
+            }
 
             [$serial, $code] = $parts;
             $serial = strtoupper(trim($serial));
             $code   = trim($code);
 
-            if (empty($serial) || empty($code)) continue;
-            if (in_array($code, ['NONE', 'CODE'])) continue;
+            if ($serial === '' || $code === '') {
+                continue;
+            }
+
+            if (in_array(strtoupper($code), ['NONE', 'CODE'], true)) {
+                continue;
+            }
 
             $prefix = $this->detectPrefix($serial, $filename);
 
@@ -142,7 +165,7 @@ class ImportRadioCodes extends Command
                 'updated_at' => now(),
             ];
 
-            if (count($batch) >= 1000) {
+            if (count($batch) >= self::BATCH_SIZE) {
                 DB::table('radio_codes')->insertOrIgnore($batch);
                 $count += count($batch);
                 $batch = [];
@@ -163,11 +186,16 @@ class ImportRadioCodes extends Command
     {
         $lower = strtolower($filename);
         foreach ($this->filenameMap as $key => $info) {
-            if (str_contains($lower, $key)) return $info;
+            if (str_contains($lower, $key)) {
+                return $info;
+            }
         }
 
+        $upperFilename = strtoupper($filename);
         foreach ($this->brands as $prefix => $info) {
-            if (str_starts_with(strtoupper($filename), $prefix)) return $info;
+            if (str_starts_with($upperFilename, $prefix)) {
+                return $info;
+            }
         }
 
         return ['brand' => 'Unknown', 'car_make' => 'Unknown'];
@@ -175,6 +203,7 @@ class ImportRadioCodes extends Command
 
     private function detectPrefix(string $serial, string $filename = ''): string
     {
+        $serial = strtoupper($serial);
         $lowerFilename = strtolower($filename);
         if (str_contains($lowerFilename, 'becker_4btn')) {
             return 'B4BTN';
@@ -199,8 +228,11 @@ class ImportRadioCodes extends Command
         }
 
         foreach (array_keys($this->brands) as $prefix) {
-            if (str_starts_with($serial, $prefix)) return $prefix;
+            if (str_starts_with($serial, $prefix)) {
+                return $prefix;
+            }
         }
+
         return substr($serial, 0, 3);
     }
 }

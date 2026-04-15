@@ -1,58 +1,202 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+> ## FEJLESZTÉS ALATT
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+![UnlockMyRadio Hero](docs/images/unlockmyradio-hero.png)
 
-## About Laravel
+# UnlockMyRadio
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+UnlockMyRadio is a car radio unlock code platform built with Laravel + MySQL.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Users enter a radio serial, the system resolves the correct lookup strategy, and then either:
+- reveals the code directly in test mode, or
+- completes Stripe checkout and reveals the code after successful payment.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Stack
 
-## Learning Laravel
+- PHP 8.3+
+- Laravel 13
+- MySQL (production)
+- Stripe Checkout (`stripe/stripe-php`)
+- Vite frontend assets
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Core Features
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- Serial search with normalization and family-specific fallback logic
+- Multi-result model selection flow (Becker, Chrysler, Continental overlaps)
+- Web checkout + payment success reveal
+- Public API v1 (`/api/v1/*`) for search and checkout
+- Reseller API with credit-based decode flow and API key auth
+- Bulk importer command for TXT code tables
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Serial Lookup Logic
 
-## Agentic Development
+Implemented in `app/Support/RadioCodeResolver.php`.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Flow:
+1. Exact match on normalized serial and compact serial
+2. Fallback by family when exact match fails
+3. If multiple records match, return selection options
+
+Fallback rules:
+- Becker: detect `BE...` or 8-digit patterns, lookup by last 4 digits
+- Continental: detect `A2C...`, `A3C...`, `TVPQN...`, lookup by last 4 digits
+- Chrysler: detect `T...`, try last 5 first, then last 4
+
+Important DB rule:
+- `radio_codes` is unique by `(serial, brand, car_make)` - not by `serial` alone.
+
+Detailed rule reference:
+- `docs/SERIAL_LOOKUP_RULES.md`
+
+## Web Routes
+
+Defined in `routes/web.php`.
+
+- `GET /` - home search page
+- `POST /search` - resolve serial
+- `POST /search/select` - confirm model selection when multiple matches
+- `POST /checkout` - start checkout (or direct reveal in test mode)
+- `GET /payment/success` - reveal code after paid Stripe session
+
+Hardening behavior:
+- `GET /search`, `GET /search/select`, `GET /checkout` route back to home instead of returning 405.
+
+## API v1 Routes
+
+Defined in `routes/api.php`, all under `/api/v1`.
+
+- `POST /search`
+- `POST /checkout`
+- `GET /payment/success`
+- `GET /reseller/balance`
+- `POST /reseller/decode`
+
+API docs:
+- `docs/API_V1.md`
+- `docs/RESELLER_API.md`
+
+## Reseller Credit System
+
+Tables:
+- `resellers`
+- `reseller_api_keys`
+- `reseller_credit_logs`
+
+Auth:
+- `Authorization: Bearer <API_KEY>` or
+- `X-Api-Key: <API_KEY>`
+
+Behavior:
+- each successful `/api/v1/reseller/decode` consumes 1 credit in a DB transaction
+- API keys are stored as SHA-256 hashes
+- create command prints plaintext key once
+
+Useful commands:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+php artisan reseller:create "Partner Name" --email=partner@example.com
+php artisan reseller:credit 1 100
+php artisan reseller:credit 1 -10 --reason=manual_fix
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Test Mode vs Live Mode
 
-## Contributing
+Config key:
+- `UNLOCK_DIRECT_REVEAL`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+When `true`:
+- payment is bypassed in web flow
+- result page shows `PLAY & REVEAL CODE`
 
-## Code of Conduct
+When `false`:
+- Stripe checkout is required to reveal code
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+After changing env in production:
 
-## Security Vulnerabilities
+```bash
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Local Development
 
-## License
+1. Install dependencies
+```bash
+composer install
+npm install
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+2. Configure environment
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+3. Set DB and run migrations
+```bash
+php artisan migrate
+```
+
+4. Run app
+```bash
+composer run dev
+```
+
+## Required Environment Variables
+
+Minimum for full functionality:
+
+```dotenv
+APP_URL=https://your-domain.com
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=unlockmyradio
+DB_USERNAME=...
+DB_PASSWORD=...
+
+STRIPE_KEY=pk_...
+STRIPE_SECRET=sk_...
+
+UNLOCK_DIRECT_REVEAL=true
+RESELLER_TEST_DEFAULT_CREDITS=50
+```
+
+## Importing Radio Code Tables
+
+Bulk import command:
+
+```bash
+php artisan import:radiocodes /absolute/path/to/txt/folder
+```
+
+Importer behavior:
+- scans `*.txt`
+- maps filename/prefix to `brand` and `car_make`
+- tags overlap-sensitive families with `prefix` values (for example `CHR55`, `CHR56`, `CHR4`, `CONT4`, `B4BTN`, `B6BTN`, `B8BTN`)
+- inserts in batches via `insertOrIgnore`
+
+## Deployment (Current VPS Flow)
+
+```bash
+git pull origin main
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+```
+
+## Project Structure (Key Files)
+
+- `app/Support/RadioCodeResolver.php` - serial normalization and fallback lookup
+- `app/Http/Controllers/RadioCodeController.php` - web flow
+- `app/Http/Controllers/Api/RadioCodeApiController.php` - public API flow
+- `app/Http/Controllers/Api/ResellerApiController.php` - credit API
+- `app/Console/Commands/ImportRadioCodes.php` - TXT import
+- `config/unlock.php` - direct reveal mode switch
+- `resources/views/result.blade.php` - reveal/payment UI
+- `resources/views/select-model.blade.php` - variant chooser
+
+## Security Notes
+
+- Never commit real API keys, Stripe keys, or server credentials.
+- If any token is exposed in chat/logs, rotate it immediately.
