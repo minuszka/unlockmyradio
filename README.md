@@ -1,6 +1,8 @@
-> ## FEJLESZTÉS ALATT
+# FEJLESZTES ALATT
 
-![UnlockMyRadio Hero](docs/images/unlockmyradio-hero.png)
+<p align="center">
+  <img src="docs/images/unlockmyradio-hero.png" alt="UnlockMyRadio Hero" width="900">
+</p>
 
 # UnlockMyRadio
 
